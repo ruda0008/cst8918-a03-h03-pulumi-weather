@@ -1,9 +1,11 @@
 config:
-  azure-native:location: westus2
+  azure-native:location: westus3
   cst8918-a03-infra:appPath: ../
   cst8918-a03-infra:containerPort: '80'
   cst8918-a03-infra:publicPort: '80'
   cst8918-a03-infra:cpu: '1'
   cst8918-a03-infra:memory: '2'
-  cst8918-a03-infra:prefixName: 'cst8918a03ruda0008'
-  cst8918-a03-infra:imageTag: 'v0.2.0'
+  cst8918-a03-infra:prefixName: 'cst8918a03ngab0016'
+  cst8918-a03-infra:imageTag: 'v0.3.0'
+  cst8918-a03-infra:weatherApiKey:
+    secure: AAABABhN53PtIDKVYdPLjU8mPCZRJpK5azoq6raoCLZjtM6bNdTgMzJGyZCO1HPme/3cuaQNem5vhVwLg2oqpw==

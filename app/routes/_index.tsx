@@ -1,8 +1,9 @@
 import { json } from '@remix-run/node'
 import { useLoaderData } from '@remix-run/react'
-import { fetchWeatherData } from '../api-services/open-weather-service'
-import { capitalizeFirstLetter } from '../utils/text-formatting'
 import type { MetaFunction } from '@remix-run/node'
+
+import { fetchWeatherData } from '../data-access/open-weather-service'
+import { capitalizeFirstLetter } from '../utils/text-formatting'
 
 export const meta: MetaFunction = () => {
   return [
@@ -16,28 +17,47 @@ export const meta: MetaFunction = () => {
 
 const location = {
   city: 'Ottawa',
-  postalCode: 'K2G 1V8', // Algonquin College, Woodroffe Campus
+  postalCode: 'K2G 1V8',
   lat: 45.3211,
   lon: -75.7391,
   countryCode: 'CA',
 }
+
 const units = 'metric'
 
 export async function loader() {
-  // TODO: accept query params for location and units
-  // TODO: look up location by postal code
+  try {
+    const data = await fetchWeatherData({
+      lat: location.lat,
+      lon: location.lon,
+      units,
+    })
 
-  const data = await fetchWeatherData({
-    lat: location.lat,
-    lon: location.lon,
-    units: units,
-  })
-  return json({ currentConditions: data })
+    return json({ currentConditions: data, error: null })
+  } catch (error) {
+    console.error('Failed to fetch weather data:', error)
+
+    return json({
+      currentConditions: null,
+      error: 'Weather service unavailable',
+    })
+  }
 }
 
 export default function CurrentConditions() {
-  const { currentConditions } = useLoaderData<typeof loader>()
+  const { currentConditions, error } = useLoaderData<typeof loader>()
+
+  if (error || !currentConditions) {
+    return (
+      <main style={{ padding: '1.5rem', fontFamily: 'system-ui, sans-serif' }}>
+        <h1>Remix Weather</h1>
+        <p>Weather data is currently unavailable.</p>
+      </main>
+    )
+  }
+
   const weather = currentConditions.weather[0]
+
   return (
     <>
       <main
@@ -54,7 +74,9 @@ export default function CurrentConditions() {
             (LAT: {location.lat}, LON: {location.lon})
           </span>
         </p>
+
         <h2>Current Conditions</h2>
+
         <div
           style={{
             display: 'flex',
@@ -63,30 +85,18 @@ export default function CurrentConditions() {
             alignItems: 'center',
           }}
         >
-          <img src={getWeatherIconUrl(weather.icon)} alt="" />
+          <img
+            src={getWeatherIconUrl(weather.icon)}
+            alt={weather.description}
+          />
           <div style={{ fontSize: '2rem' }}>
             {currentConditions.main.temp.toFixed(1)}°C
           </div>
         </div>
-        <p
-          style={{
-            fontSize: '1.2rem',
-            fontWeight: '400',
-          }}
-        >
+
+        <p style={{ fontSize: '1.2rem' }}>
           {capitalizeFirstLetter(weather.description)}. Feels like{' '}
-          {currentConditions.main['feels_like'].toFixed(1)}°C.
-          <br />
-          <span style={{ color: 'hsl(220, 23%, 60%)', fontSize: '0.85rem' }}>
-            updated at{' '}
-            {new Intl.DateTimeFormat('en-CA', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-            }).format(currentConditions.dt * 1000)}
-          </span>
+          {currentConditions.main.feels_like.toFixed(1)}°C.
         </p>
       </main>
       <section
@@ -99,17 +109,10 @@ export default function CurrentConditions() {
         <h2>Raw Data</h2>
         <pre>{JSON.stringify(currentConditions, null, 2)}</pre>
       </section>
-      <hr style={{ marginTop: '2rem' }} />
-      <p>
-        Learn how to customize this app. Read the{' '}
-        <a target="_blank" href="https://remix.run/docs" rel="noreferrer">
-          Remix Docs
-        </a>
-      </p>
     </>
   )
 }
 
 function getWeatherIconUrl(iconCode: string) {
-  return `http://openweathermap.org/img/wn/${iconCode}@2x.png`
+  return `https://openweathermap.org/img/wn/${iconCode}@2x.png`
 }

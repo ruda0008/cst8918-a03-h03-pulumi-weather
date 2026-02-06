@@ -3,6 +3,7 @@ import * as resources from '@pulumi/azure-native/resources'
 import * as containerregistry from '@pulumi/azure-native/containerregistry'
 import * as dockerBuild from '@pulumi/docker-build'
 import * as containerinstance from '@pulumi/azure-native/containerinstance'
+import * as cache from '@pulumi/azure-native/redis'
 
 // Import the configuration settings for the current stack.
 const config = new pulumi.Config()
@@ -24,6 +25,31 @@ const memory = config.requireNumber('memory')
 // Create a resource group.
 const resourceGroup = new resources.ResourceGroup(`${prefixName}-rg`)
 
+// Create a managed Redis service
+const redis = new cache.Redis(`${prefixName}-redis`, {
+  name: `${prefixName}-weather-cache`,
+  location: 'westus3',
+  resourceGroupName: resourceGroup.name,
+  enableNonSslPort: true,
+  redisVersion: 'Latest',
+  minimumTlsVersion: '1.2',
+  redisConfiguration: {
+    maxmemoryPolicy: 'allkeys-lru'
+  },
+  sku: {
+    name: 'Basic',
+    family: 'C',
+    capacity: 0
+  }
+})
+
+// Extract the auth creds from the deployed Redis service
+const redisAccessKey = cache
+  .listRedisKeysOutput({ name: redis.name, resourceGroupName: resourceGroup.name })
+  .apply(keys => keys.primaryKey)
+
+// Construct the Redis connection string to be passed as an environment variable in the app container
+const redisConnectionString = pulumi.interpolate`redis://:${redisAccessKey}@${redis.hostName}:${redis.port}`
 // Create the container registry.
 const registry = new containerregistry.Registry(`${prefixName}ACR`, {
   resourceGroupName: resourceGroup.name,
@@ -50,7 +76,7 @@ const image = new dockerBuild.Image(`${prefixName}-image`, {
   tags: [pulumi.interpolate`${registry.loginServer}/${imageName}:${imageTag}`],
   context: { location: appPath },
   dockerfile: { location: `${appPath}/Dockerfile` },
- // target: 'production',
+  target: 'production',
   platforms: ['linux/amd64', 'linux/arm64'],
   push: true,
   registries: [
@@ -94,7 +120,11 @@ const containerGroup = new containerinstance.ContainerGroup(
           },
           {
             name: 'WEATHER_API_KEY',
-            value: '69cd45604ede7475dcd3b636aada3a80',
+            value: config.requireSecret('weatherApiKey'),
+          },
+           {
+            name: 'REDIS_URL',
+            value: redisConnectionString, // Pass the Redis connection string to the app
           },
         ],
         resources: {
